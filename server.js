@@ -13,7 +13,7 @@ const GEOCODE_API_KEY = process.env.googleMapsAPI;
 const WEATHER_API_KEY = process.env.darkSkyAPI;
 const EVENTS_API_KEY = process.env.eventBriteAPI;
 const MOVIE_API_KEY = process.env.movieAPI;
-const YELP_API_KEY = processs.env.yelpAPI;
+const YELP_API_KEY = process.env.yelpAPI;
 const PORT = process.env.PORT;
 const DATABASE_URL = process.env.DATABASE_URL;
 
