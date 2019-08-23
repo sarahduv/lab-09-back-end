@@ -59,6 +59,8 @@ function Movie(title, overview, vote_average, vote_count, backdrop_path, popular
   this.released_on = release_date;
 }
 
+function Yelp()
+
 function updateLocation(query, request, response) {
   const urlToVisit = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${GEOCODE_API_KEY}`
   superagent.get(urlToVisit).then(responseFromSuper => {
