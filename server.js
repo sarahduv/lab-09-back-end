@@ -23,6 +23,8 @@ const MS_IN_SEC = 1000;
 const SEC_IN_HOUR = 3600;
 const SEC_IN_DAY = 3600 * 24;
 
+let movieStartUrl = 'https://image.tmdb.org/t/p/w500';
+
 // Connect to database
 const client = new pg.Client(DATABASE_URL);
 client.connect();
@@ -47,6 +49,26 @@ function Eventbrite(url, name, date, summary){
   this.summary = summary;
 }
 
+function Movie(title, overview, vote_average, vote_count, backdrop_path, popularity, release_date){
+  this.title = title;
+  this.overview = overview;
+  this.average_votes=vote_average;
+  this.total_votes = vote_count;
+  this.image_url = 'https://image.tmdb.org/t/p/w500'+backdrop_path;
+  this.popularity = popularity;
+  this.released_on = release_date;
+}
+
+// yelp.name, yelp.image_url, yelp.price, yelp.rating, yelp.url
+
+function Yelp(name, image_url, price, rating, url){
+  this.name = name;
+  this.image_url = image_url;
+  this.price = price;
+  this.rating = rating;
+  this.url = url;
+}
+
 function updateLocation(query, request, response) {
   const urlToVisit = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${GEOCODE_API_KEY}`
   superagent.get(urlToVisit).then(responseFromSuper => {
@@ -69,7 +91,7 @@ function updateLocation(query, request, response) {
 
     //client.query takes in a string and array and smooshes them into a proper sql statement that it sends to the db
     client.query(sqlQueryInsert, valuesArray);
-    response.send(newLocation);        
+    response.send(newLocation);
   }).catch(error => {
     response.status(500).send(error.message);
     console.error(error);
@@ -78,7 +100,7 @@ function updateLocation(query, request, response) {
 
 function updateWeather(query, request, response){
   const urlToVisit = `https://api.darksky.net/forecast/${WEATHER_API_KEY}/${request.query.data.latitude},${request.query.data.longitude}`
-  superagent.get(urlToVisit).then(responseFromSuper => {        
+  superagent.get(urlToVisit).then(responseFromSuper => {
     const formattedDays = responseFromSuper.body.daily.data.map(
       day => new Day(day.summary, day.time)
     );
@@ -122,6 +144,52 @@ function updateEvents(query, request, response){
     console.error(error);
   })
 }
+
+//update movies
+function updateMovies(query, request, response){
+  const urlToVisit = `https://api.themoviedb.org/3/search/movie?api_key=${MOVIE_API_KEY}&query=${query.search_query}`;
+  superagent.get(urlToVisit).then(responseFromSuper => {
+    const formattedMovie = responseFromSuper.body.results.map(
+      movie => new Movie(movie.title, movie.overview, movie.vote_average, movie.vote_count, movie.backdrop_path, movie.popularity, movie.release_date)
+    );
+    response.send(formattedMovie);
+
+    formattedMovie.forEach(movie => {
+      const sqlQueryInsert = `
+        INSERT INTO movies (search_query, title, overview, average_votes, total_votes, image_url, popularity, released_on, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`;
+      const valuesArray = [query.search_query, movie.title, movie.overview, movie.vote_average, movie.vote_count, movie.backdrop_path, movie.popularity, movie.release_date, now()];
+      client.query(sqlQueryInsert, valuesArray);
+    })
+  }).catch(error => {
+    response.status(500).send(error.message);
+    console.error(error);
+  })
+}
+
+function updateYelp(query, request, response){
+  const urlToVisit = `https://api.yelp.com/v3/businesses/search?latitude=${request.query.data.latitude}&longitude=${request.query.data.longitude}`;
+  return superagent.get(urlToVisit).set('Authorization', `Bearer ${YELP_API_KEY}`).then(responseFromSuper => {
+    const formattedYelp = responseFromSuper.body.businesses.map(
+      yelp => new Yelp(yelp.name, yelp.image_url, yelp.price, yelp.rating, yelp.url)
+    );
+    console.log('YEEEEEELPPPPPP', formattedYelp);
+    response.send(formattedYelp);
+
+    formattedYelp.forEach(yelp => {
+      const sqlQueryInsert = `
+        INSERT INTO movies (search_query, name, image_url, price, rating, url, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+      const valuesArray = [yelp.name, yelp.image_url, yelp.price, yelp.rating, yelp.url, now()];
+      client.query(sqlQueryInsert, valuesArray);
+    })
+  }).catch(error => {
+    response.state(500).send(error.message);
+    console.error(error);
+  })
+}
+
+
 
 function getLocation(request, response) {
   const query = request.query.data;
@@ -167,6 +235,39 @@ function getEvents(request, response) {
   });
 }
 
+
+function getMovies(request, response) {
+  const query = request.query.data;
+  client.query(`SELECT * FROM movies WHERE search_query=$1`, [query.search_query]).then(sqlResult=> {
+    if(sqlResult.rowCount > 0){
+      if (isOlderThan(sqlResult.rows, SEC_IN_DAY)) {
+        deleteRows(sqlResult.rows, 'movies');
+        updateMovies(query, request, response);
+      } else {
+        response.send(sqlResult.rows);
+      }
+    } else {
+      updateMovies(query, request, response);
+    }
+  });
+}
+
+function getYelp(request, response) {
+  const query = request.query.data;
+  client.query(`SELECT * FROM yelp WHERE search_query=$1`, [query.search_query]).then(sqlResult=> {
+    if(sqlResult.rowCount > 0){
+      if (isOlderThan(sqlResult.rows, SEC_IN_DAY)) {
+        deleteRows(sqlResult.rows, 'yelp');
+        updateYelp(query, request, response);
+      } else {
+        response.send(sqlResult.rows);
+      }
+    } else {
+      updateYelp(query, request, response);
+    }
+  });
+}
+
 function now() {
   // seconds now
   return Math.floor((new Date()).valueOf() / MS_IN_SEC);
@@ -193,5 +294,9 @@ function isOlderThan(rows, seconds){
 app.get('/location', getLocation);
 app.get('/weather', getWeather);
 app.get('/events', getEvents);
+app.get('/movies', getMovies);
+app.get('/yelp', getYelp);
 
 app.listen(PORT, () => {console.log(`app is up on PORT ${PORT}`)});
+
+console.log();
