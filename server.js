@@ -248,3 +248,5 @@ app.get('/events', getEvents);
 app.get('/movies', getMovies);
 
 app.listen(PORT, () => {console.log(`app is up on PORT ${PORT}`)});
+
+console.log();
