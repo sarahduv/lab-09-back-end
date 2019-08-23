@@ -23,6 +23,8 @@ const MS_IN_SEC = 1000;
 const SEC_IN_HOUR = 3600;
 const SEC_IN_DAY = 3600 * 24;
 
+let movieStartUrl = 'https://image.tmdb.org/t/p/w500';
+
 // Connect to database
 const client = new pg.Client(DATABASE_URL);
 client.connect();
@@ -45,6 +47,16 @@ function Eventbrite(url, name, date, summary){
   this.name = name;
   this.event_date = new Date(date).toDateString();
   this.summary = summary;
+}
+
+function Movie(title, overview, average_votes, total_votes, backdrop_path, popularity, released_on){
+  this.title = title;
+  this.overview = overview;
+  this.average_votes=average_votes;
+  this.total_votes = total_votes;
+  this.image_url = backdrop_path;
+  this.popularity = popularity;
+  this.released_on = released_on;
 }
 
 function updateLocation(query, request, response) {
@@ -123,6 +135,30 @@ function updateEvents(query, request, response){
   })
 }
 
+//update movies
+function updateMovies(query, request, response){
+  const urlToVisit = `https://api.themoviedb.org/3/search/movie?api_key=${MOVIE_API_KEY}&query=${query.search_query}`;
+  superagent.get(urlToVisit).then(responseFromSuper => {
+    const formattedMovie = responseFromSuper.body.results.map(
+      movie => new Movie(movie.title, movie.overview, movie.average_votes, movie.backdrop_path, movie.popularity, movie.released_on)
+    );
+    response.send(formattedMovie);
+
+    formattedMovie.forEach(movie => {
+      const sqlQueryInsert = `
+        INSERT INTO movies (search_query, title, overview, average_votes, image_url, popularity, released_on)
+        VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+      const valuesArray = [query.search_query, movie.title, movie.overview, movie.average_votes, `${movieStartUrl}${movie.backdrop_path}`, movie.popularity, movie.released_on, now()];
+      client.query(sqlQueryInsert, valuesArray);
+    })
+  }).catch(error => {
+    response.status(500).send(error.message);
+    console.error(error);
+  })
+}
+
+
+
 function getLocation(request, response) {
   const query = request.query.data;
   client.query(`SELECT * FROM locations WHERE search_query=$1`, [query]).then(sqlResult => {
@@ -167,6 +203,22 @@ function getEvents(request, response) {
   });
 }
 
+function getMovies(request, response) {
+  const query = request.query.data;
+  client.query(`SELECT * FROM movies WHERE search_query=$1`, [query.search_query]).then(sqlResult=> {
+      if(sqlResult.rowCount > 0){
+        if (isOlderThan(sqlResult.rows, SEC_IN_DAY)) {
+          deleteRows(sqlResult.rows, 'movies');
+          updateMovies(query, request, response);
+        } else {
+          response.send(sqlResult.rows);
+        }
+      } else {
+        updateMovies(query, request, response);
+    }
+  });
+}
+
 function now() {
   // seconds now
   return Math.floor((new Date()).valueOf() / MS_IN_SEC);
@@ -193,5 +245,8 @@ function isOlderThan(rows, seconds){
 app.get('/location', getLocation);
 app.get('/weather', getWeather);
 app.get('/events', getEvents);
+app.get('/movies', getMovies);
 
 app.listen(PORT, () => {console.log(`app is up on PORT ${PORT}`)});
+
+console.log();
