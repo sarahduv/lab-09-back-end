@@ -41,11 +41,25 @@ CREATE TABLE movies (
   id SERIAL PRIMARY KEY,
   search_query VARCHAR(255),
   title VARCHAR(255),
-  overview VARCHAR(255),
+  overview VARCHAR,
   average_votes VARCHAR(255),
+  total_votes VARCHAR(255),
   image_url VARCHAR(255),
   popularity VARCHAR(255),
   released_on VARCHAR(255),
   created_at NUMERIC
 );
--- Entirely to test if things worked
+
+DROP TABLE IF EXISTS yelp;
+
+CREATE TABLE yelp (
+  id SERIAL PRIMARY KEY,
+  search_query VARCHAR(255),
+  name VARCHAR(255),
+  image_url VARCHAR(255),
+  price VARCHAR(255),
+  rating VARCHAR(255),
+  url VARCHAR(255),
+  created_at NUMERIC
+);
+

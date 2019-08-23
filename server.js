@@ -59,7 +59,14 @@ function Movie(title, overview, vote_average, vote_count, backdrop_path, popular
   this.released_on = release_date;
 }
 
-function Yelp()
+
+function Yelp(name, image_url, price, rating, url){
+  this.name = name;
+  this.image_url = image_url;
+  this.price = price;
+  this.rating = rating;
+  this.url = url;
+}
 
 function updateLocation(query, request, response) {
   const urlToVisit = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${GEOCODE_API_KEY}`
@@ -83,7 +90,7 @@ function updateLocation(query, request, response) {
 
     //client.query takes in a string and array and smooshes them into a proper sql statement that it sends to the db
     client.query(sqlQueryInsert, valuesArray);
-    response.send(newLocation);        
+    response.send(newLocation);
   }).catch(error => {
     response.status(500).send(error.message);
     console.error(error);
@@ -92,7 +99,7 @@ function updateLocation(query, request, response) {
 
 function updateWeather(query, request, response){
   const urlToVisit = `https://api.darksky.net/forecast/${WEATHER_API_KEY}/${request.query.data.latitude},${request.query.data.longitude}`
-  superagent.get(urlToVisit).then(responseFromSuper => {        
+  superagent.get(urlToVisit).then(responseFromSuper => {
     const formattedDays = responseFromSuper.body.daily.data.map(
       day => new Day(day.summary, day.time)
     );
@@ -159,6 +166,27 @@ function updateMovies(query, request, response){
   })
 }
 
+function updateYelp(query, request, response){
+  const urlToVisit = `https://api.yelp.com/v3/businesses/search?latitude=${request.query.data.latitude}&longitude=${request.query.data.longitude}`;
+  return superagent.get(urlToVisit).set('Authorization', `Bearer ${YELP_API_KEY}`).then(responseFromSuper => {
+    const formattedYelp = responseFromSuper.body.businesses.map(
+      yelp => new Yelp(yelp.name, yelp.image_url, yelp.price, yelp.rating, yelp.url)
+    );
+    console.log('YEEEEEELPPPPPP', formattedYelp);
+    response.send(formattedYelp);
+
+    formattedYelp.forEach(yelp => {
+      const sqlQueryInsert = `
+        INSERT INTO movies (search_query, name, image_url, price, rating, url, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+      const valuesArray = [yelp.name, yelp.image_url, yelp.price, yelp.rating, yelp.url, now()];
+      client.query(sqlQueryInsert, valuesArray);
+    })
+  }).catch(error => {
+    response.state(500).send(error.message);
+    console.error(error);
+  })
+}
 
 
 function getLocation(request, response) {
@@ -209,15 +237,31 @@ function getEvents(request, response) {
 function getMovies(request, response) {
   const query = request.query.data;
   client.query(`SELECT * FROM movies WHERE search_query=$1`, [query.search_query]).then(sqlResult=> {
-      if(sqlResult.rowCount > 0){
-        if (isOlderThan(sqlResult.rows, SEC_IN_DAY)) {
-          deleteRows(sqlResult.rows, 'movies');
-          updateMovies(query, request, response);
-        } else {
-          response.send(sqlResult.rows);
-        }
-      } else {
+    if(sqlResult.rowCount > 0){
+      if (isOlderThan(sqlResult.rows, SEC_IN_DAY)) {
+        deleteRows(sqlResult.rows, 'movies');
         updateMovies(query, request, response);
+      } else {
+        response.send(sqlResult.rows);
+      }
+    } else {
+      updateMovies(query, request, response);
+    }
+  });
+}
+
+function getYelp(request, response) {
+  const query = request.query.data;
+  client.query(`SELECT * FROM yelp WHERE search_query=$1`, [query.search_query]).then(sqlResult=> {
+    if(sqlResult.rowCount > 0){
+      if (isOlderThan(sqlResult.rows, SEC_IN_DAY)) {
+        deleteRows(sqlResult.rows, 'yelp');
+        updateYelp(query, request, response);
+      } else {
+        response.send(sqlResult.rows);
+      }
+    } else {
+      updateYelp(query, request, response);
     }
   });
 }
@@ -249,7 +293,9 @@ app.get('/location', getLocation);
 app.get('/weather', getWeather);
 app.get('/events', getEvents);
 app.get('/movies', getMovies);
+app.get('/yelp', getYelp);
 
 app.listen(PORT, () => {console.log(`app is up on PORT ${PORT}`)});
 
 console.log();
+
