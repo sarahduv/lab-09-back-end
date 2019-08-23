@@ -59,7 +59,6 @@ function Movie(title, overview, vote_average, vote_count, backdrop_path, popular
   this.released_on = release_date;
 }
 
-// yelp.name, yelp.image_url, yelp.price, yelp.rating, yelp.url
 
 function Yelp(name, image_url, price, rating, url){
   this.name = name;
@@ -156,8 +155,8 @@ function updateMovies(query, request, response){
 
     formattedMovie.forEach(movie => {
       const sqlQueryInsert = `
-        INSERT INTO movies (search_query, title, overview, average_votes, total_votes, image_url, popularity, released_on, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`;
+        INSERT INTO movies (search_query, title, overview, vote_average, vote_count, image_url, popularity, release_date)
+        VALUES ($1, $2, $3, $4, $5, $6, $7);`;
       const valuesArray = [query.search_query, movie.title, movie.overview, movie.vote_average, movie.vote_count, movie.backdrop_path, movie.popularity, movie.release_date, now()];
       client.query(sqlQueryInsert, valuesArray);
     })
@@ -188,7 +187,6 @@ function updateYelp(query, request, response){
     console.error(error);
   })
 }
-
 
 
 function getLocation(request, response) {
@@ -300,3 +298,4 @@ app.get('/yelp', getYelp);
 app.listen(PORT, () => {console.log(`app is up on PORT ${PORT}`)});
 
 console.log();
+

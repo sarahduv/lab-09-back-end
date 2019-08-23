@@ -62,3 +62,4 @@ CREATE TABLE yelp (
   url VARCHAR(255),
   created_at NUMERIC
 );
+
