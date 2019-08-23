@@ -49,15 +49,17 @@ function Eventbrite(url, name, date, summary){
   this.summary = summary;
 }
 
-function Movie(title, overview, average_votes, total_votes, backdrop_path, popularity, released_on){
+function Movie(title, overview, vote_average, vote_count, backdrop_path, popularity, release_date){
   this.title = title;
   this.overview = overview;
-  this.average_votes=average_votes;
-  this.total_votes = total_votes;
-  this.image_url = backdrop_path;
+  this.average_votes=vote_average;
+  this.total_votes = vote_count;
+  this.image_url = 'https://image.tmdb.org/t/p/w500'+backdrop_path;
   this.popularity = popularity;
-  this.released_on = released_on;
+  this.released_on = release_date;
 }
+
+function Yelp()
 
 function updateLocation(query, request, response) {
   const urlToVisit = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${GEOCODE_API_KEY}`
@@ -140,15 +142,15 @@ function updateMovies(query, request, response){
   const urlToVisit = `https://api.themoviedb.org/3/search/movie?api_key=${MOVIE_API_KEY}&query=${query.search_query}`;
   superagent.get(urlToVisit).then(responseFromSuper => {
     const formattedMovie = responseFromSuper.body.results.map(
-      movie => new Movie(movie.title, movie.overview, movie.average_votes, movie.backdrop_path, movie.popularity, movie.released_on)
+      movie => new Movie(movie.title, movie.overview, movie.vote_average, movie.vote_count, movie.backdrop_path, movie.popularity, movie.release_date)
     );
     response.send(formattedMovie);
 
     formattedMovie.forEach(movie => {
       const sqlQueryInsert = `
-        INSERT INTO movies (search_query, title, overview, average_votes, image_url, popularity, released_on)
+        INSERT INTO movies (search_query, title, overview, vote_average, vote_count, image_url, popularity, release_date)
         VALUES ($1, $2, $3, $4, $5, $6, $7);`;
-      const valuesArray = [query.search_query, movie.title, movie.overview, movie.average_votes, `${movieStartUrl}${movie.backdrop_path}`, movie.popularity, movie.released_on, now()];
+      const valuesArray = [query.search_query, movie.title, movie.overview, movie.vote_average, movie.vote_count, movie.backdrop_path, movie.popularity, movie.release_date, now()];
       client.query(sqlQueryInsert, valuesArray);
     })
   }).catch(error => {
@@ -202,6 +204,7 @@ function getEvents(request, response) {
     }
   });
 }
+
 
 function getMovies(request, response) {
   const query = request.query.data;
